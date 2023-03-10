@@ -40,6 +40,8 @@ import serial.tools.list_ports
 import subprocess
 import json
 import os
+import time
+
 
 #import VNA wrapper
 from methods.phaseshift_method import PhaseShiftMethod
@@ -195,71 +197,72 @@ class AmcpGui(QtWidgets.QMainWindow, amcp_gui.Ui_MainWindow, dm.DataManagement):
             self.update_log('Disconnecting from {}'.format(self.vna_type))
         except Exception as e:
             self.logger.debug('disconnect failed:\n{}'.format(e))
-
-
+    
     def run_measurement(self):
-        self.logger.debug('running measurement')
+        while (1):
+            self.logger.debug('running measurement')
 
-        # update progressbar 0%
-        self.progressBar.setValue(0)
+            # update progressbar 0%
+            self.progressBar.setValue(0)
 
-        # Measurement Setup
-        fmin = self.f_min.text()
-        fmax = self.f_max.text()
+            # Measurement Setup
+            fmin = self.f_min.text()
+            fmax = self.f_max.text()
 
-        self.update_log('starting measurement using {}'.format(self.vna_type))
-        self.update_log('f_min={}'.format(fmin))
-        self.update_log('f_max={}'.format(fmax))
+            self.update_log('starting measurement using {}'.format(self.vna_type))
+            self.update_log('f_min={}'.format(fmin))
+            self.update_log('f_max={}'.format(fmax))
 
-        # update progressbar 100%
-        self.progressBar.setValue(10)
+            # update progressbar 100%
+            self.progressBar.setValue(10)
 
-        # make sure the com ports are updated
-        self.update_comports()
+            # make sure the com ports are updated
+            self.update_comports()
 
-        # run measurement
-        if self.select_vna.currentText() == 'MiniVNA':
-            try:
-                e = self.vna.run_vnaJ(fstart=int(float(self.f_min.text())),
-                                      fstop=int(float(self.f_max.text())),
-                                      average=self.averaging.text(),
-                                      exports='csv')
+            # run measurement
+            if self.select_vna.currentText() == 'MiniVNA':
+                try:
+                    e = self.vna.run_vnaJ(fstart=int(float(self.f_min.text())),
+                                          fstop=int(float(self.f_max.text())),
+                                          average=self.averaging.text(),
+                                          exports='csv')
 
-                # update progressbar 50%
-                self.progressBar.setValue(50)
+                    # update progressbar 50%
+                    self.progressBar.setValue(50)
 
-                self.loadData(file=self.export_file)
+                    self.loadData(file=self.export_file)
+                    self.plot_spectrum(frequency=self.data['Frequency(Hz)'],
+                                       power=self.data['Transmission Loss(dB)'],
+                                       phase=self.data['Phase(deg)'])
+
+                except Exception as e:
+                    self.logger.debug('error: measurement not completed:\n{}'.format(e))
+                    self.update_log('could not run vnaJ, loading example data')
+                    self.update_log('{}'.format(e))
+                    self.loadData('{}/{}.csv'.format(self.export_loc, self.test_data))
+                    self.plot_spectrum(frequency=self.data['Frequency(Hz)'],
+                                       power=self.data['Transmission Loss(dB)'],
+                                       phase=self.data['Phase(deg)'])
+
+            elif self.select_vna.currentText() == 'NanoVNA':
+                self.vna.setFrequencies(start=float(self.f_min.text()), stop=float(self.f_max.text()))
+                self.data = self.vna.getTrData(averaging=int(self.averaging.text()))
+
                 self.plot_spectrum(frequency=self.data['Frequency(Hz)'],
-                                   power=self.data['Transmission Loss(dB)'],
-                                   phase=self.data['Phase(deg)'])
+                power=self.data['Transmission Loss(dB)'],
+                phase=self.data['Phase(deg)'])
+                
+            # update progressbar 90%
+            self.progressBar.setValue(90)
 
-            except Exception as e:
-                self.logger.debug('error: measurement not completed:\n{}'.format(e))
-                self.update_log('could not run vnaJ, loading example data')
-                self.update_log('{}'.format(e))
-                self.loadData('{}/{}.csv'.format(self.export_loc, self.test_data))
-                self.plot_spectrum(frequency=self.data['Frequency(Hz)'],
-                                   power=self.data['Transmission Loss(dB)'],
-                                   phase=self.data['Phase(deg)'])
+            self.recompute()
 
-        elif self.select_vna.currentText() == 'NanoVNA':
-            self.vna.setFrequencies(start=float(self.f_min.text()), stop=float(self.f_max.text()))
-            self.data = self.vna.getTrData(averaging=int(self.averaging.text()))
+            # update progressbar 100%
+            self.progressBar.setValue(100)
 
-            self.plot_spectrum(frequency=self.data['Frequency(Hz)'],
-                               power=self.data['Transmission Loss(dB)'],
-                               phase=self.data['Phase(deg)'])
-
-        # update progressbar 90%
-        self.progressBar.setValue(90)
-
-        self.recompute()
-
-        # update progressbar 100%
-        self.progressBar.setValue(100)
-
-        # update gui
-        self.update()
+            # update gui
+            self.update()
+            time.sleep(1)
 
     def run_estimation(self):
         self.logger.debug('running estimation')
@@ -283,8 +286,8 @@ class AmcpGui(QtWidgets.QMainWindow, amcp_gui.Ui_MainWindow, dm.DataManagement):
         self.L1_res.setText('%.1f' % (self.L1*1e3))
         self.R1_res.setText('%.1f' % self.R1)
         self.Q_res.setText('%.1f' % self.Q)
-        self.fs_res.setText('%.0f' % (self.fs/1e3))
-        self.fp_res.setText('%.0f' % (self.fp/1e3))
+        self.fs_res.setText('%.0f' % (self.fs))
+        self.fp_res.setText('%.0f' % (self.fp))
 
         if self.ESR == -1:
             self.esr_res.setText('-')
